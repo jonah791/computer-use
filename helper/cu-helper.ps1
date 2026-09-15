@@ -274,11 +274,10 @@ try {
       } else {
         $target = [IntPtr]([int64]$spec)
       }
-      if ([CuNative]::IsIconic($target)) { [void][CuNative]::ShowWindow($target, [CuNative]::SW_RESTORE) }
-      else { [void][CuNative]::ShowWindow($target, [CuNative]::SW_SHOW) }
-      $ok = [CuNative]::SetForegroundWindow($target)
+      $ok = [CuNative]::ForceForeground($target)
       Start-Sleep -Milliseconds 400
-      $json.focused = @{ requested = [int64]$target; apiOk = $ok; foreground = (Get-ForegroundInfo) }
+      $fg = Get-ForegroundInfo
+      $json.focused = @{ requested = [int64]$target; apiOk = $ok; landed = ([int64]$fg.hwnd -eq [int64]$target); foreground = $fg }
     }
 
     'shot' {

@@ -61,6 +61,49 @@ public class CuNative
     [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
+    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
+    public const uint SWP_SHOWWINDOW = 0x0040;
+
+    /// <summary>把窗口切到前台（尽力而为，返回**是否真的落到前台**——读 GetForegroundWindow 确认，不信 API 返回值）。
+    /// 背景进程直调 SetForegroundWindow 会被 Windows 拒绝（实测 apiOk=false），
+    /// 故三级降级：直调 → TOPMOST 往返 → AttachThreadInput 借用前台线程的输入队列。</summary>
+    public static bool ForceForeground(IntPtr hWnd)
+    {
+        if (GetForegroundWindow() == hWnd) return true;
+        if (IsIconic(hWnd)) ShowWindow(hWnd, SW_RESTORE);
+        else ShowWindow(hWnd, SW_SHOW);
+
+        if (SetForegroundWindow(hWnd)) return true;
+
+        SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetWindowPos(hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        if (SetForegroundWindow(hWnd)) return true;
+
+        IntPtr fg = GetForegroundWindow();
+        uint fgThread = 0;
+        if (fg != IntPtr.Zero)
+        {
+            uint unused = 0;
+            fgThread = GetWindowThreadProcessId(fg, out unused);
+        }
+        uint myThread = GetCurrentThreadId();
+        if (fgThread != 0 && fgThread != myThread)
+        {
+            AttachThreadInput(myThread, fgThread, true);
+            BringWindowToTop(hWnd);
+            SetForegroundWindow(hWnd);
+            AttachThreadInput(myThread, fgThread, false);
+        }
+        return GetForegroundWindow() == hWnd;
+    }
 
     // ---------- 常量 ----------
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
