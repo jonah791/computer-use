@@ -1,0 +1,4 @@
+- insert:
+    - id: agent-computer-use
+      name: computer-use
+      config: {}
