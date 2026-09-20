@@ -16,7 +16,8 @@
     "lib",
     "helper",
     "docs",
-    "README.md"
+    "README.md",
+    "dsh-plugin.json"
   ],
   "license": "MIT",
   "peerDependencies": {
