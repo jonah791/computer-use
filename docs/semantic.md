@@ -114,6 +114,7 @@ native 层 (helper/*)    P/Invoke：截屏 · 窗口 · 光标 · SendInput/keyb
 - 文档描述「是什么/不变量/契约」，实现必须逼近它；**实现变化必须同步本文**（I3 纪律）。
 - `src/pure.ts` 是文档第 4 节不变量的**可执行副本**（单测即验收）；`helper/` 是 native 语义的唯一落点。
 - 版本史：v0.1.0 首版（probe/screen/windows/focus/mouse/key）。
+- **2026-09-22 复核（消除 D3）**：本仓已纳入 DSH Community Fabric 契约面（`dsh-plugin.json` + `src/fabric.ts`）——它属**结构性声明**，不改变上文任何行为语义。此前报「实现比文档新」正是由 `chore(fabric)` 提交推进的 `src/fabric.ts` mtime 触发，而非能力变更。
 
 ## 9. 实践修订记录
 
