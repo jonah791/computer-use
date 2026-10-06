@@ -8,5 +8,5 @@
 # ⚠️ 不要用 .npmrc —— pnpm 11.7.0 已不再从 .npmrc 读取该设置
 #    （auto-install-peers 与 autoInstallPeers 两种写法实测均无效）。
 #    必须在 pnpm-workspace.yaml 里用 camelCase 的 autoInstallPeers。
-#    实验矩阵见 E:\alice\reports\dsh-升级-0.1.7-rc.2-2026-09-26.md 第 4.2 节。
+#    实验矩阵见 E:\alice\docs\reports\dsh-升级-0.1.7-rc.2-2026-09-26.md 第 4.2 节（2026-10-06：顶层 reports/ 已并入 docs/reports/）。
 autoInstallPeers: false
