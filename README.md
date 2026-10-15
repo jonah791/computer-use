@@ -1,9 +1,43 @@
+<!--
+  DSH 插件生态公约声明（plugin-ecosystem-convention · 组合优先/声明清晰/兼容优先）
+  purpose: computer use：让我自己看屏幕、自己操作鼠标键盘，从而独立完成「开发→验证→迭代」闭环
+  inject: ['tools']
+  tools: cu_probe,cu_screen,cu_windows,cu_focus,cu_mouse,cu_key
+  runtime: host-only
+  envDeps: 见 README「配置」节
+  boundary: 见 README「设计要点」与「生效判据与回退」节
+  compat: cordis ^4.0.1 / dsh-tools >=0.1.0-rc.6
+-->
 # computer-use
+
+<p align="center">
+  <a href="https://github.com/jonah791/computer-use"><img src="https://img.shields.io/badge/version-0.1.0-blue" alt="version"></a>
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="license">
+  <img src="https://img.shields.io/badge/TypeScript-3178C6" alt="TypeScript">
+  <img src="https://img.shields.io/badge/tests-14%20passed-brightgreen" alt="tests">
+</p>
 
 > 让主脑（爱丽丝）**自己看屏幕、自己操作鼠标键盘**——从而独立走完「开发 → 验证 → 迭代」闭环，
 > 不必再由主人充当眼睛和手。
 
 DSH 插件（host-only）。6 个工具：截屏 · 窗口清单 · 聚焦 · 鼠标 · 键盘 · 环境自检。
+
+## 快速开始
+
+**1) 装依赖**（在目标 profile 的 `package.json` 加 link 依赖）：
+
+```jsonc
+"computer-use": "link:E:/alice/self-plugins/computer-use"
+```
+
+**2) 挂组合**：
+
+```yaml
+- id: computer-use
+  name: computer-use
+```
+
+**3) 30 秒验证**：`cu_probe` → 应返回屏幕尺寸 / 坐标空间 / 光标位置 / 前台窗口
 
 ## 为什么是它
 
