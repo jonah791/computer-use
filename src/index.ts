@@ -487,6 +487,71 @@ export function apply(ctx: Context, config: Config): void {
     },
   }))
 
+  ctx.tools.register(defineTool({
+    name: 'cu_post',
+    description: '后台投递点击/滚轮到指定窗口（PostMessage）——**不抢前台、不动光标**，'
+      + '是"主人在用电脑、我又必须操作某个后台窗口"时唯一可用的注入通道。'
+      + '⚠ 但覆盖面很窄：对 **Chromium 和网页无效**（cua Issue #1623 实测：不触发 DOM 输入），'
+      + '对多数 WPF/XAML 不可靠，只对**原生 Win32 控件**可靠。'
+      + '⇒ 现代应用/网页优先用 UIA 语义动作（nuphus-mcp 的 desktop_semantic_*，先 observe 再 execute），其次前台 cu_mouse。'
+      + '返回 delivered=消息进了队列 / verified **恒为 false**（此 API 无回执）——'
+      + '**调用方必须自己验证状态变化**（读控件值 / 看落盘副作用），把 delivered=true 当成功上报就是伪造成功。',
+    parameters: {
+      hwnd: { type: 'number', required: true, description: '目标窗口 hwnd（用 cu_windows 取）' },
+      x: { type: 'number', required: true, description: '屏幕物理像素 X（内部自动转客户区坐标）' },
+      y: { type: 'number', required: true, description: '屏幕物理像素 Y' },
+      button: { type: 'string', description: 'left(默认) | right | middle，或 wheel:<delta> 发滚轮（如 wheel:-120）' },
+    },
+    output: {
+      schema: {
+        properties: {
+          ok: { type: 'boolean', required: true },
+          mode: { type: 'string' }, hwnd: { type: 'number' }, title: { type: 'string' }, cls: { type: 'string' },
+          visible: { type: 'boolean' },
+          screenX: { type: 'number' }, screenY: { type: 'number' },
+          clientX: { type: 'number' }, clientY: { type: 'number' },
+          delivered: { type: 'boolean' }, verified: { type: 'boolean' },
+          warning: { type: 'string' }, error: { type: 'string' },
+        },
+        additionalProperties: false, type: 'object',
+      },
+      render: (_a: unknown, v: any) => [{
+        type: 'text',
+        text: v.ok
+          ? `CU_POST ${v.mode} hwnd=${v.hwnd} cls=${v.cls} visible=${v.visible} `
+            + `screen=(${v.screenX},${v.screenY}) client=(${v.clientX},${v.clientY}) `
+            + `delivered=${v.delivered} verified=${v.verified}\n⚠ ${v.warning}`
+          : `CU_ERROR(${v.error})`,
+      }],
+    },
+    async execute(args: { hwnd?: number; x?: number; y?: number; button?: string }) {
+      const hwnd = Number(args.hwnd ?? 0)
+      const xi = Math.trunc(Number(args.x ?? NaN))
+      const yi = Math.trunc(Number(args.y ?? NaN))
+      if (!Number.isFinite(hwnd) || hwnd <= 0) return { ok: false, error: 'CU_ERROR(需要 hwnd，用 cu_windows 取)' }
+      if (!Number.isFinite(xi) || !Number.isFinite(yi)) return { ok: false, error: 'CU_ERROR(需要 x/y 屏幕坐标)' }
+      const mode = String(args.button ?? 'left').trim().toLowerCase() || 'left'
+      // ⚠ 有意不走 decideInjectionGuard：本命令不碰光标、不改前台，目标是**显式 hwnd**
+      //   ⇒ 没有"注入到主人正在用的窗口"的风险面（这是它唯一的优势，别加多余的闸）。
+      const argv = ['post', String(Math.trunc(hwnd)), String(xi), String(yi), mode]
+      const r = await call('cu_post', argv, { hwnd: Math.trunc(hwnd), x: xi, y: yi, mode })
+      if (!r.ok) return { ok: false, error: txt(r.error ?? r.stage) }
+      const p = (r.data.posted ?? {}) as Record<string, unknown>
+      const sc = (p.screen ?? {}) as Record<string, unknown>
+      const cl = (p.client ?? {}) as Record<string, unknown>
+      const ok = p.ok === true
+      return {
+        ok, mode: txt(p.mode), hwnd: Number(p.hwnd ?? 0), title: txt(p.title), cls: txt(p.cls),
+        visible: p.visible === true,
+        screenX: Number(sc.x ?? 0), screenY: Number(sc.y ?? 0),
+        clientX: Number(cl.x ?? 0), clientY: Number(cl.y ?? 0),
+        delivered: p.delivered === true, verified: p.verified === true,
+        warning: txt(p.warning ?? ''),
+        ...(ok ? {} : { error: txt(p.reason ?? '投递失败') }),
+      }
+    },
+  }))
+
   logger.info('computer-use ready build=%s helper=%s interpreter=%s', BUILD, helperScript(), String(config.interpreter ?? ''))
   trace({ op: 'apply', phase: 'boot', stage: 'done', ok: true, build: BUILD, helper: helperScript(), interpreter: String(config.interpreter ?? '') })
 }

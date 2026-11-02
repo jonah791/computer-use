@@ -58,6 +58,105 @@ public class CuNative
     [DllImport("user32.dll", SetLastError = true)] public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
     [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+    [DllImport("user32.dll")] public static extern bool ScreenToClient(IntPtr hWnd, ref POINT p);
+
+    // ---------- 窗口样式守卫：不抢前台的关键机制 ----------
+    // 来源：cua 的 docs/windows-background-input-re-plan.md（标 RESOLVED，e2e 6/6 通过）
+    //   给目标窗口临时设 WS_EX_NOACTIVATE 后，Windows **拒绝**把它前台化——
+    //   点击激活、WM_MOUSEACTIVATE、以及 WPF/XAML/Tauri 自动化处理器自己发起的
+    //   SetForegroundWindow(self) **全部被拒**，而窗口**照样收到**点击与按键。
+    //   作用域只是那一个窗口，用完立刻还原。
+    // ⚠ 反面记录（别重试）：全局前台锁 SPI_SETFOREGROUNDLOCKTIMEOUT 实测**无效**——
+    //   我们自己注入/投递的输入本身会「合法化」目标的前台主张，锁到最大也照样被抢。
+    [DllImport("user32.dll", SetLastError = true)] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll", SetLastError = true)] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+    [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr hWnd, uint gaFlags);
+
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+    public const uint GA_ROOT = 2;
+
+    /// <summary>临时给目标窗口加 WS_EX_NOACTIVATE，让 Windows 拒绝前台化它。
+    /// ⚠ **必须还原**：不还原会让该窗口**永久**失去激活能力（用户点任务栏都不亮）。
+    /// ⚠ 判据只能是**回读**：SetWindowLong 返回旧值，旧值为 0 时无法区分成功与失败。
+    /// 用法（PowerShell）：$g = New-Object 'CuNative+NoActivateGuard' -ArgumentList $hwnd; try { ... } finally { $g.Dispose() }</summary>
+    public class NoActivateGuard : IDisposable
+    {
+        private IntPtr _hwnd;
+        private int _origStyle;
+        private bool _armed;
+        private bool _disposed;
+
+        public NoActivateGuard(IntPtr hwnd)
+        {
+            _hwnd = hwnd;
+            _origStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, _origStyle | WS_EX_NOACTIVATE);
+            _armed = (GetWindowLong(hwnd, GWL_EXSTYLE) & WS_EX_NOACTIVATE) != 0;
+        }
+
+        public bool Armed { get { return _armed; } }
+        public int OriginalStyle { get { return _origStyle; } }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            if (_hwnd != IntPtr.Zero)
+            {
+                SetWindowLong(_hwnd, GWL_EXSTYLE, _origStyle);
+                _hwnd = IntPtr.Zero;
+            }
+        }
+    }
+
+    // ---------- 后台投递（PostMessage） ----------
+    // ⚠ 用途极窄（2026-10-26 实测 + cua Issue #1623）：
+    //   PostMessage(WM_LBUTTONDOWN/UP) 对 **Chromium 不触发 DOM 输入**（网页/壳的坐标点击必须走 SendInput）；
+    //   对多数 WPF/XAML 同样不可靠。只有**原生 Win32 控件**（button / edit / 标准 dialog）吃这一套。
+    //   ⇒ 它**不是**前台的替代品，只在「目标已在后台、且确知是原生控件」时用，且调用方必须自己验证结果。
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+    public const uint WM_MOUSEMOVE = 0x0200;
+    public const uint WM_LBUTTONDOWN = 0x0201;
+    public const uint WM_LBUTTONUP = 0x0202;
+    public const uint WM_RBUTTONDOWN = 0x0204;
+    public const uint WM_RBUTTONUP = 0x0205;
+    public const uint WM_MBUTTONDOWN = 0x0207;
+    public const uint WM_MBUTTONUP = 0x0208;
+    public const uint WM_MOUSEWHEEL = 0x020A;
+
+    /// <summary>把两个 16 位值打包成 lParam（鼠标消息用）。
+    /// ⚠ 鼠标消息的坐标是**客户区**坐标（相对窗口左上角），不是屏幕坐标。</summary>
+    public static IntPtr MakeLParam(int lo, int hi)
+    {
+        return (IntPtr)((hi << 16) | (lo & 0xFFFF));
+    }
+
+    /// <summary>投递一次鼠标点击到目标窗口的消息队列。
+    /// 返回**消息是否进了队列** —— ⚠ 它**不代表控件响应了**，这是本 API 的固有限制，不是实现缺陷。
+    /// 调用方必须自己验证状态变化（读控件值 / 看落盘副作用）。</summary>
+    public static bool PostClick(IntPtr hWnd, int clientX, int clientY, string button)
+    {
+        uint down; uint up;
+        if (button == "right") { down = WM_RBUTTONDOWN; up = WM_RBUTTONUP; }
+        else if (button == "middle") { down = WM_MBUTTONDOWN; up = WM_MBUTTONUP; }
+        else { down = WM_LBUTTONDOWN; up = WM_LBUTTONUP; }
+        IntPtr lp = MakeLParam(clientX, clientY);
+        bool a = PostMessage(hWnd, down, IntPtr.Zero, lp);
+        bool b = PostMessage(hWnd, up, IntPtr.Zero, lp);
+        return a && b;
+    }
+
+    /// <summary>投递滚轮到目标窗口（lParam=客户区坐标，wParam 高字=增量）。
+    /// 同样只保证「进了队列」，不保证目标应用处理了。</summary>
+    public static bool PostWheel(IntPtr hWnd, int clientX, int clientY, int delta)
+    {
+        IntPtr lp = MakeLParam(clientX, clientY);
+        IntPtr wp = (IntPtr)((delta << 16) | 0);
+        return PostMessage(hWnd, WM_MOUSEWHEEL, wp, lp);
+    }
     [DllImport("user32.dll")] public static extern IntPtr GetDesktopWindow();
     [DllImport("user32.dll")] public static extern short GetKeyState(int vk);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);
