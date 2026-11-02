@@ -57,7 +57,7 @@ native 层 (helper/*)    P/Invoke：截屏 · 窗口 · 光标 · SendInput/keyb
 
 ## 5. 契约
 
-### 5.1 工具面（6 个）
+### 5.1 工具面（7 个）
 
 | 工具 | 作用 | 注入类？ |
 |---|---|---|
@@ -67,6 +67,7 @@ native 层 (helper/*)    P/Invoke：截屏 · 窗口 · 光标 · SendInput/keyb
 | `cu_focus` | 把窗口切到前台 | 否（但会改变焦点） |
 | `cu_mouse` | move / click / double / drag / scroll | **是** |
 | `cu_key` | 组合键（`ctrl+s`）与 Unicode 文本；可 `verifyKey` 读回状态自证 | **是** |
+| `cu_post` | 后台投递点击/滚轮到指定窗口（PostMessage）——**不抢前台、不动光标**，是「主人在用电脑、我又必须操作后台窗口」时唯一可用的注入通道。⚠ 覆盖面很窄：对 **Chromium 与网页无效**（不触发 DOM 输入），对多数 WPF/XAML 不可靠，**只对原生 Win32 控件可靠** | 否 |
 
 ### 5.2 调用点清单
 
