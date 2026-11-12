@@ -140,6 +140,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_probe',
+    deferLoading: true,
     description: 'computer-use 环境自检：屏幕尺寸/坐标空间/DPI 声明结果/光标位置/前台窗口/窗口总数。'
       + '任何 cu_* 行为异常时第一个调用它——先确认仪器，再怀疑现象。',
     parameters: {},
@@ -186,6 +187,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_screen',
+    deferLoading: true,
     description: '截屏并落盘为 PNG，返回文件路径（用 read_image 亲眼看，或 vision_ask 让 VLM 描述）。'
       + 'mode=full 全屏 / region 指定矩形 / window 指定窗口（PrintWindow，可抓被遮挡窗口）。'
       + '坐标与尺寸一律**物理像素**，与 cu_mouse 的点击坐标同空间，一格不用换算。',
@@ -248,6 +250,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_windows',
+    deferLoading: true,
     description: '窗口清单 / 定点查询"这个坐标上是哪个窗口"。find 是**注入前的常规动作**：'
       + '先确认目标窗口存在与它当前的位置，再决定点哪。每行格式 '
       + 'hwnd=<n> pid=<n> proc=<name> vis=<0|1> min=<0|1> rect=x,y,w,h title=<title>。',
@@ -304,6 +307,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_focus',
+    deferLoading: true,
     description: '把窗口切到前台（SetForegroundWindow）。做**注入前的准备**：把目标窗口激活，'
       + '然后用它的标题或 hwnd 作为 cu_mouse/cu_key 的 expectWindow/expectHwnd。'
       + '注意 Windows 可能拒绝后台进程抢焦点——返回里的 foreground 才是事实（apiOk 只是 API 返回值）。',
@@ -345,6 +349,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_mouse',
+    deferLoading: true,
     description: '鼠标注入：move / click / double / drag / scroll（坐标=物理像素，与 cu_screen 同空间）。'
       + '**注入类工具必须声明目标窗口**：给 expectWindow（标题子串）或 expectHwnd；'
       + '前台与期望不符时会被**拒绝执行**（安全闸，事故驱动：曾把字符注入到主人正在用的窗口）。'
@@ -420,6 +425,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_key',
+    deferLoading: true,
     description: '键盘注入：keys 发组合键（如 "enter" / "ctrl+s" / "win" / "ctrl+shift+esc"），'
       + 'text 发任意 Unicode 文本（中文也可以；内部走 base64 通道，不经命令行转义）。'
       + '**注入类工具必须声明目标窗口**（expectWindow / expectHwnd），不符即拒绝。'
@@ -489,6 +495,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.tools.register(defineTool({
     name: 'cu_post',
+    deferLoading: true,
     description: '后台投递点击/滚轮到指定窗口（PostMessage）——**不抢前台、不动光标**，'
       + '是"主人在用电脑、我又必须操作某个后台窗口"时唯一可用的注入通道。'
       + '⚠ 但覆盖面很窄：对 **Chromium 和网页无效**（cua Issue #1623 实测：不触发 DOM 输入），'
